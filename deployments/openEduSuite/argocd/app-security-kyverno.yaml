@@ -1,0 +1,55 @@
+# security-kyverno — Kyverno-Engine (chart 3.9.1 / app v1.19.1), ZKI IT-Grundschutz.
+# Images via Node-Registry-Mirror (kein Cluster-Egress); argocd via resourceFilters
+# ausgenommen. Policies separat: App security-policies (nach dieser App syncen!).
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: security-kyverno
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: scs
+  source:
+    repoURL: ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/openedusuite/openedusuite.git
+    targetRevision: main
+    path: k8s/security/kyverno
+    helm:
+      valueFiles:
+      - kyverno-suite-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kyverno
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    # CRDs überschreiten das 256KB-LastApplied-Annotation-Limit -> zwingend SSA.
+    - ServerSideApply=true
+  ignoreDifferences:
+  # SSA-Normalisierung: Helm-CRD-Templates ohne labels/annotations-Map bekommen
+  # live labels:{} bzw. rendern explizit annotations:{} → kosmetischer Dauer-Diff.
+  # x2-Werte bewusst LEER gelassen (keine zusätzlichen Labels gewünscht).
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+    jqPathExpressions:
+    - .metadata.labels
+    - .metadata.annotations
+  # k8s-1.36-Feld, dem ArgoCD-2.12-Schema unbekannt -> bricht den Diff sonst ganz
+  # (empirisch verifiziert; Muster wie app-operation.yaml). Falls FALSE-OutOfSync
+  # auftritt: SSA für Deployments prüfen — hier bisher unkritisch.
+  - group: apps
+    kind: Deployment
+    jqPathExpressions:
+    - .status.terminatingReplicas
+  - group: "*"
+    kind: "*"
+    jsonPointers:
+    - /metadata/generation
+    - /metadata/creationTimestamp
+    - /metadata/resourceVersion
+    - /metadata/uid
+    - /status

@@ -1,0 +1,67 @@
+# operation-cnpg — CloudNativePG operator for the operation-db cluster.
+# CNPG status fields are volatile → ignoreDifferences jqPathExpressions (.status).
+# Repo-Fix: zeigte früher auf aufgelöstes openedusuite.git → jetzt opendesk-edu.git.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: operaton-cnpg
+  namespace: argocd
+  annotations:
+    # Label-basiertes Tracking statt Annotations: die Tracking-Annotation überschreitet
+    # das 256KB-Annotation-Limit der großen CNPG-CRDs (clusters/poolers).
+    argocd.argoproj.io/tracking-method: label
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: scs
+  source:
+    repoURL: ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/openedusuite/openedusuite.git
+    targetRevision: main
+    path: k8s/operaton/cnpg-operator
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openedusuite
+  ignoreDifferences:
+  - group: postgresql.cnpg.io
+    kind: Cluster
+    jqPathExpressions:
+    - .status
+  - group: postgresql.cnpg.io
+    kind: ScheduledBackup
+    jqPathExpressions:
+    - .status
+  - group: postgresql.cnpg.io
+    kind: Backup
+    jqPathExpressions:
+    - .status
+  # K8s >=1.30 schreibt status.terminatingReplicas (auch 0) in Deployment/StatefulSet;
+  # ArgoCD-2.12-Schema kennt das Feld nicht -> ComparisonError. Ignorieren.
+  - group: apps
+    kind: Deployment
+    jqPathExpressions:
+    - .status.terminatingReplicas
+  - group: apps
+    kind: StatefulSet
+    jqPathExpressions:
+    - .status.terminatingReplicas
+  - group: "*"
+    kind: "*"
+    jsonPointers:
+    - /metadata/generation
+    - /metadata/creationTimestamp
+    - /metadata/resourceVersion
+    - /metadata/uid
+    - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
+    - /metadata/annotations/kubectl.kubernetes.io~1restartedAt
+    - /metadata/annotations/deployment.kubernetes.io~1revision
+    - /metadata/annotations/argocd.argoproj.io~1tracking-id
+    - /status
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ApplyOutOfSyncOnly=true
+    - ServerSideApply=true

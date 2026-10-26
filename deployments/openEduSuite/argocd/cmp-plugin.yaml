@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2025 openDesk SME contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# ArgoCD Config Management Plugin (CMP) v2 for helmfile.
+#
+# This ConfigMap defines a CMP plugin that runs `helmfile template` to render
+# Kubernetes manifests from the openDesk SME helmfile tree.
+#
+# The plugin is loaded by a sidecar container on argocd-repo-server.
+# See argocd/README.md for installation instructions.
+#
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cmp-helmfile
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: argocd-cmp-helmfile
+    app.kubernetes.io/part-of: opendesk
+data:
+  plugin.yaml: "apiVersion: argoproj.io/v1alpha1\nkind: ConfigManagementPlugin\nmetadata:\n\
+    \  name: helmfile\nspec:\n  discover:\n    find:\n      command: [sh, -c]\n  \
+    \    args:\n        - \"test -f helmfile.yaml.gotmpl && test -f helmfile_generic.yaml.gotmpl\
+    \ && echo found\"\n  init:\n    command: [sh, -c]\n    args:\n      - |\n    \
+    \    set -euo pipefail\n        echo \"[helmfile-cmp] Checking helmfile...\"\n\
+    \        which helmfile\n        echo \"[helmfile-cmp] Checking helm...\"\n  \
+    \      which helm\n        echo \"[helmfile-cmp] Init complete.\"\n  generate:\n\
+    \    command: [sh, -c]\n    args:\n      - |\n        set -euo pipefail\n    \
+    \    ENV=\"${HELMFILE_ENVIRONMENT:-default}\"\n        echo \"[helmfile-cmp] Rendering\
+    \ with environment: ${ENV}\"\n        echo \"[helmfile-cmp] DOMAIN=${DOMAIN:-opendesk.internal}\"\
+    \n        echo \"[helmfile-cmp] NAMESPACE=${NAMESPACE:-opendesk-sme}\"\n     \
+    \   SELECTOR_ARGS=\"\"\n        if [ -n \"${COMPONENT:-}\" ]; then\n         \
+    \ echo \"[helmfile-cmp] Filtering to component: ${COMPONENT}\"\n          SELECTOR_ARGS=\"\
+    --selector app=${COMPONENT}\"\n        fi\n        helmfile \\\n          --environment\
+    \ \"${ENV}\" \\\n          --file helmfile.yaml.gotmpl \\\n          template\
+    \ \\\n          --skip-deps \\\n          ${SELECTOR_ARGS}\n        echo \"[helmfile-cmp]\
+    \ Render complete.\"\n"

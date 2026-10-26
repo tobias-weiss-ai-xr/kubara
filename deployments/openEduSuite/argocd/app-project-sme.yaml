@@ -1,0 +1,35 @@
+# Reconciles the live 'opendesk-sme' AppProject. Not used by any current
+# Application (all apps use the 'scs' project), but present in the cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: opendesk-sme
+  namespace: argocd
+spec:
+  description: openDesk SME — self-authored Helm charts deployed via helmfile + ArgoCD
+  sourceRepos:
+  - https://gitlab.opencode.de/bmi/opendesk/contributing/forks/tobias.weiss-10343/opendesk-sme.git
+  - https://github.com/tobias-weiss-ai-xr/opendesk-sme.git
+  - ssh://git@gitlab.opencode.de/bmi/opendesk/contributing/forks/tobias.weiss-10343/opendesk-sme.git
+  destinations:
+  - namespace: opendesk-sme
+    server: https://kubernetes.default.svc
+  - namespace: opendesk
+    server: https://kubernetes.default.svc
+  - namespace: argocd
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: "*"
+    kind: "*"
+  namespaceResourceWhitelist:
+  - group: "*"
+    kind: "*"
+  namespaceResourceBlacklist:
+  - group: ""
+    kind: ResourceQuota
+  - group: ""
+    kind: LimitRange
+  orphanedResources:
+    warn: false
+  sourceNamespaces:
+  - argocd

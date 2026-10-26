@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: scs
+  namespace: argocd
+spec:
+  description: SCS K3s Cluster - all applications
+  sourceRepos:
+  - ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/scs.git
+  - ssh://git@gitlab.hrz.uni-marburg.de/weissto/next-mailserver.git
+  - ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/openedusuite/openedusuite.git
+  - ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/opendesk-sme.git
+  - ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/ansible-baremetal-k3s.git
+  - https://gitlab.hrz.uni-marburg.de/hrz/kubernetes/ansible-baremetal-k3s.git
+  destinations:
+  - namespace: "*"
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: "*"
+    kind: "*"
+  namespaceResourceWhitelist:
+  - group: "*"
+    kind: "*"

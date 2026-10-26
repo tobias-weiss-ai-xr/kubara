@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openedusuite-idp
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/hydrate: normal
+spec:
+  project: scs
+  source:
+    repoURL: ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/openedusuite/openedusuite.git
+    targetRevision: main
+    path: k8s/openedusuite-idp
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openedusuite
+  ignoreDifferences:
+  # k8s-verwaltete Metadata/Status ohne Drift-Wert (ArgoCD 2.12 vergleicht sie sonst mit)
+  - group: "*"
+    kind: "*"
+    jsonPointers:
+    - /metadata/generation
+    - /metadata/creationTimestamp
+    - /metadata/resourceVersion
+    - /metadata/uid
+    - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
+    - /metadata/annotations/kubectl.kubernetes.io~1restartedAt
+    - /metadata/annotations/deployment.kubernetes.io~1revision
+    - /metadata/annotations/argocd.argoproj.io~1tracking-id
+    - /status
+  syncPolicy:
+    # automated/prune 2026-10-09 deaktiviert: Galera-STS-Überschneidung mit openedusuite-App;
+    # Sync nur noch manuell nach Prüfung.
+    # App 2026-10-23 von openedusuite-ce → openedusuite-idp umbenannt (Klarheit: IdP-Basis,
+    # kein zweiter Tenant). Ordner k8s/openedusuite-idp/ entsprechend mitumbenannt.
+    syncOptions:
+    - CreateNamespace=true
+    - ApplyOutOfSyncOnly=true

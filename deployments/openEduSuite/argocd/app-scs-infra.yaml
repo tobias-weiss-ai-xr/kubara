@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: 2025 openDesk
+# SPDX-License-Identifier: Apache-2.0
+#
+# SCS infrastructure baseline: namespaces, network policies, storage classes.
+# Sources from the ansible-baremetal-k3s repo (k8s/ dir).
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: scs-infra
+  namespace: argocd
+spec:
+  project: scs
+  source:
+    repoURL: https://gitlab.hrz.uni-marburg.de/hrz/kubernetes/ansible-baremetal-k3s.git
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  ignoreDifferences:
+  # Bound PVCs: volumeName is set by the storage provisioner at bind time and is
+  # immutable. Git manifests cannot carry it; ignore so ArgoCD never tries to
+  # patch (which fails with 'spec: Forbidden: spec is immutable').
+  - group: ""
+    kind: PersistentVolumeClaim
+    jsonPointers:
+    - /spec/volumeName
+  - group: ""
+    kind: PersistentVolumeClaim
+    jsonPointers:
+    - /status
+  # k8s >=1.28 schreibt .status.terminatingReplicas w.hrend StatefulSet-Rollouts;
+  # das Schema von ArgoCD 2.12 kennt das Feld nicht -> ComparisonError. Ignorieren.
+  - group: apps
+    kind: StatefulSet
+    jqPathExpressions:
+    - .status.terminatingReplicas
+  # k8s >=1.27 setzt .spec.persistentVolumeClaimRetentionPolicy auf
+  # {whenDeleted: Retain, whenScaled: Retain}; ArgoCD normalisiert das Feld nicht.
+  # Defensiv ignoriert (war nicht die eigentliche OutOfSync-Ursache, siehe unten).
+  - group: apps
+    kind: StatefulSet
+    jsonPointers:
+    - /spec/persistentVolumeClaimRetentionPolicy
+  # ECHTE Ursache des dauerhaften OutOfSync bei seaweedfs-volume/nix-builder:
+  # ArgoCD normalisiert in spec.volumeClaimTemplates[].metadata ein
+  # creationTimestamp: null hinein, das Live-Objekt laesst das Feld weg.
+  # Wichtig: ArgoCD greift einen ignoreDifferences-Pfad nur, wenn er in BEIDEN
+  # Objekten existiert -- creationTimestamp fehlt live, also muss ein Elternknoten
+  # ignoriert werden. Index-Pointer (/.../0/metadata) loest ArgoCD hier nicht auf,
+  # und jqPathExpressions greifen ebenso nicht (getestet). Daher das Array selbst.
+  # Der generische /metadata/creationTimestamp greift nur auf Root-Ebene.
+  - group: apps
+    kind: StatefulSet
+    jsonPointers:
+    - /spec/volumeClaimTemplates
+  # k8s-verwaltete Metadata/Status generisch ignorieren
+  - group: "*"
+    kind: "*"
+    jsonPointers:
+    - /metadata/generation
+    - /metadata/creationTimestamp
+    - /metadata/resourceVersion
+    - /metadata/uid
+    - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
+    - /metadata/annotations/kubectl.kubernetes.io~1restartedAt
+    - /metadata/annotations/deployment.kubernetes.io~1revision
+    - /metadata/annotations/argocd.argoproj.io~1tracking-id
+    - /status
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ApplyOutOfSyncOnly=true
+    - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

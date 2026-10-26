@@ -1,0 +1,40 @@
+# security-policies — 23 ZKI-ClusterPolicies im AUDIT-Modus (Report-only).
+# Voraussetzung: App security-kyverno gesund (CRDs + Webhooks). Deren Sync
+# zuerst abwarten. Enforce-Umschaltung = Re-Gen mit enforce (Folgeschritt).
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: security-policies
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: scs
+  source:
+    repoURL: ssh://git@gitlab.hrz.uni-marburg.de/hrz/kubernetes/openedusuite/openedusuite.git
+    targetRevision: main
+    path: k8s/security/policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ApplyOutOfSyncOnly=true
+  ignoreDifferences:
+  - group: kyverno.io
+    kind: ClusterPolicy
+    jsonPointers:
+    - /status
+    - /metadata/annotations/audit.kyverno.io~1lastScanTime
+  # kyverno-1.19 verwaltet diese Felder selbst (setzt sie beim Anlegen zurueck):
+  # skipBackgroundRequests (Regel-Ebene) + allowExistingViolations (validate-Ebene).
+  # Ohne diesen Ignore bleibt die App dauerhaft OutOfSync.
+  - group: kyverno.io
+    kind: ClusterPolicy
+    jqPathExpressions:
+    - .spec.rules[].skipBackgroundRequests
+    - .spec.rules[].validate.allowExistingViolations

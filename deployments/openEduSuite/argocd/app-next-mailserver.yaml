@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: next-mailserver
+  namespace: argocd
+spec:
+  project: scs
+  source:
+    repoURL: ssh://git@gitlab.hrz.uni-marburg.de/weissto/next-mailserver.git
+    targetRevision: main
+    path: k8s/scs-k3s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openedusuite
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    managedNamespaceMetadata:
+      annotations:
+        argocd.argoproj.io/refresh: hard
+    syncOptions:
+    - CreateNamespace=true
+    - ApplyOutOfSyncOnly=true
